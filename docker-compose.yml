@@ -1,0 +1,127 @@
+version: '3.7'
+
+volumes:
+  vol-wp:  
+  vol-wp-db: 
+
+networks:
+  frontend:
+  backend:
+
+services:
+  traefik:
+    image: traefik:latest 
+    networks:
+      - backend
+      - frontend
+    ports:
+      - "80:80"     
+      - "443:443"     
+    labels:
+      - "traefik.docker.network=frontend"
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:$BALANCER_DOMAIN"
+      - "traefik.port=8080"
+    restart: always
+    environment:
+      - LEXICON_SLEEP_TIME=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  
+      - ./traefik/traefik.toml:/etc/traefik/traefik.toml
+      - ./traefik/acme/acme.json:/etc/traefik/acme/acme.json
+    container_name: traefik
+
+  db:
+    image: mariadb:latest
+    container_name: mariadb 
+    networks:
+      - backend
+    restart: always
+    volumes:
+        - vol-wp-db:/var/lib/mysql
+    ports:
+      - "3306:3306" 
+    labels:
+      - "traefik.enable=false" 
+    environment:
+      - MYSQL_ROOT_PASSWORD=$MYSQL_PASS  
+      - MYSQL_DATABASE=$DB_NAME
+      - MYSQL_USER=$DB_USER
+      - MYSQL_PASSWORD=$DB_PASSWORD
+
+  adminer:
+    image: adminer:latest 
+    networks:
+      - backend
+      - frontend
+    container_name: adminer 
+    restart: always
+    labels:
+      - "traefik.frontend.rule=Host:$DB_DOMAIN"
+      - "traefik.enable=true"
+    depends_on:
+      - db 
+
+  wordpress:
+    image: wordpress:latest
+    networks:
+      - backend
+      - frontend
+    container_name: wordpress
+    restart: always
+    depends_on:
+      - db 
+    environment:
+      - WORDPRESS_DB_HOST=$DB_HOST
+      - WORDPRESS_DB_NAME=$DB_NAME
+      - WORDPRESS_DB_USER=$DB_USER 
+      - WORDPRESS_TABLE_PREFIX=$DB_PREFIX
+      - WORDPRESS_DB_PASSWORD=$DB_PASSWORD
+      - WORDPRESS_DEBUG=1
+    volumes:
+      - vol-wp:/var/www/html 
+      - ./php.ini:/usr/local/etc/php/php.ini
+    labels:
+      - "traefik.port=80"
+      - "traefik.protocol=http"
+      - "traefik.docker.network=frontend"
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:$WORDPRESS_DOMAIN"      
+
+  wordpress-cli:
+    image: wordpress:cli
+    container_name: wordpress_cli
+    networks:
+      - backend
+    user: xfs
+    command: >
+      /bin/sh -c '
+      sleep 10;
+      wp core install --path="/var/www/html" --url="$WORDPRESS_DOMAIN" --title="Local Wordpress By Docker" --admin_user=$WP_USER --admin_password=$WP_PASSWORD --admin_email=$WP_EMAIL;
+      curl http://loripsum.net/api/4 | wp post generate --post_content --count=10'
+    depends_on:
+      - wordpress
+      - db 
+    volumes:
+      - vol-wp:/var/www/html 
+    labels:
+      - "traefik.enable=false"
+
+  watchtower:
+    image: v2tec/watchtower:latest
+    container_name: watchtower
+    command: --cleanup --schedule "0 0 0 * * *"
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.enable=false"
+
+  mail:
+    image: bytemark/smtp
+    container_name: wp-smtp
+    restart: always
+    networks:
+      - frontend
+    labels:
+      - "traefik.enable=false"
