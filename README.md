@@ -10,7 +10,7 @@ The stack used is very common (and simple):
 * WordPress (captain obvious).
 * Adminer as a database management, but i prefer to use other tools like MySQL Workbench for management.
 * Bytemark/smtp container as a simple mail server to allow SMTP Host available as "mail".
-* WP-CLI to be able to fill sample content and autoinstall WP without without doing any additional action.
+* WP-CLI to be able to fill sample content and autoinstall WP without doing any additional action.
 
 ### Prerequisites
 You will need Docker and docker-compose installed on your machine. Depending of your operating system, the installation are very different. I personally recommend Arch Linux, because AUR is awesome.
